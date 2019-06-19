@@ -267,12 +267,12 @@ class DiffMatchPatch {
             // Delete the offending records and add the merged ones.
             diffs.removeRange(pointer - count_delete - count_insert, pointer);
             pointer = pointer - count_delete - count_insert;
-            final a = diff_main(text_delete.toString(), text_insert.toString(),
-                false, deadline);
-            for (int j = a.length - 1; j >= 0; j--) {
-              diffs.insert(pointer, a[j]);
+            final subDiff = diff_main(text_delete.toString(),
+                text_insert.toString(), false, deadline);
+            for (int j = subDiff.length - 1; j >= 0; j--) {
+              diffs.insert(pointer, subDiff[j]);
             }
-            pointer = pointer + a.length;
+            pointer = pointer + subDiff.length;
           }
           count_insert = 0;
           count_delete = 0;
@@ -409,6 +409,13 @@ class DiffMatchPatch {
   }
 
   /**
+   * Hack to allow unit tests to call private method.  Do not use.
+   */
+  List<Diff> test_diff_bisect(String text1, String text2, DateTime deadline) {
+    return _diff_bisect(text1, text2, deadline);
+  }
+
+  /**
    * Given the location of the 'middle snake', split the diff in two parts
    * and recurse.
    * [text1] is the old string to be diffed.
@@ -452,9 +459,17 @@ class DiffMatchPatch {
     // So we'll insert a junk entry to avoid generating a null character.
     lineArray.add('');
 
-    String chars1 = _diff_linesToCharsMunge(text1, lineArray, lineHash);
-    String chars2 = _diff_linesToCharsMunge(text2, lineArray, lineHash);
+    // Allocate 2/3rds of the space for text1, the rest for text2.
+    String chars1 = _diff_linesToCharsMunge(text1, lineArray, lineHash, 40000);
+    String chars2 = _diff_linesToCharsMunge(text2, lineArray, lineHash, 65535);
     return {'chars1': chars1, 'chars2': chars2, 'lineArray': lineArray};
+  }
+
+  /**
+   * Hack to allow unit tests to call private method.  Do not use.
+   */
+  Map<String, dynamic> test_diff_linesToChars(String text1, String text2) {
+    return _diff_linesToChars(text1, text2);
   }
 
   /**
@@ -463,10 +478,11 @@ class DiffMatchPatch {
    * [text] is the string to encode.
    * [lineArray] is a List of unique strings.
    * [lineHash] is a Map of strings to indices.
+   * [maxLines] is the maximum length for lineArray.
    * Returns an encoded string.
    */
-  String _diff_linesToCharsMunge(
-      String text, List<String> lineArray, Map<String, int> lineHash) {
+  String _diff_linesToCharsMunge(String text, List<String> lineArray,
+      Map<String, int> lineHash, int maxLines) {
     int lineStart = 0;
     int lineEnd = -1;
     String line;
@@ -480,15 +496,23 @@ class DiffMatchPatch {
         lineEnd = text.length - 1;
       }
       line = text.substring(lineStart, lineEnd + 1);
-      lineStart = lineEnd + 1;
 
       if (lineHash.containsKey(line)) {
         chars.writeCharCode(lineHash[line]);
       } else {
+        if (lineArray.length == maxLines) {
+          // Bail out at 65535 because
+          // final chars1 = new StringBuffer();
+          // chars1.writeCharCode(65536);
+          // chars1.toString().codeUnitAt(0) == 55296;
+          line = text.substring(lineStart);
+          lineEnd = text.length;
+        }
         lineArray.add(line);
         lineHash[line] = lineArray.length - 1;
         chars.writeCharCode(lineArray.length - 1);
       }
+      lineStart = lineEnd + 1;
     }
     return chars.toString();
   }
@@ -502,12 +526,19 @@ class DiffMatchPatch {
   void _diff_charsToLines(List<Diff> diffs, List<String> lineArray) {
     final text = new StringBuffer();
     for (Diff diff in diffs) {
-      for (int y = 0; y < diff.text.length; y++) {
-        text.write(lineArray[diff.text.codeUnitAt(y)]);
+      for (int j = 0; j < diff.text.length; j++) {
+        text.write(lineArray[diff.text.codeUnitAt(j)]);
       }
       diff.text = text.toString();
       text.clear();
     }
+  }
+
+  /**
+   * Hack to allow unit tests to call private method.  Do not use.
+   */
+  void test_diff_charsToLines(List<Diff> diffs, List<String> lineArray) {
+     _diff_charsToLines(diffs, lineArray);
   }
 
   /**
@@ -519,7 +550,7 @@ class DiffMatchPatch {
   int diff_commonPrefix(String text1, String text2) {
     // TODO: Once Dart's performance stabilizes, determine if linear or binary
     // search is better.
-    // Performance analysis: http://neil.fraser.name/news/2007/10/09/
+    // Performance analysis: https://neil.fraser.name/news/2007/10/09/
     final n = min(text1.length, text2.length);
     for (int i = 0; i < n; i++) {
       if (text1[i] != text2[i]) {
@@ -538,7 +569,7 @@ class DiffMatchPatch {
   int diff_commonSuffix(String text1, String text2) {
     // TODO: Once Dart's performance stabilizes, determine if linear or binary
     // search is better.
-    // Performance analysis: http://neil.fraser.name/news/2007/10/09/
+    // Performance analysis: https://neil.fraser.name/news/2007/10/09/
     final text1_length = text1.length;
     final text2_length = text2.length;
     final n = min(text1_length, text2_length);
@@ -579,7 +610,7 @@ class DiffMatchPatch {
 
     // Start by looking for a single character match
     // and increase length until no match is found.
-    // Performance analysis: http://neil.fraser.name/news/2010/11/04/
+    // Performance analysis: https://neil.fraser.name/news/2010/11/04/
     int best = 0;
     int length = 1;
     while (true) {
@@ -595,6 +626,13 @@ class DiffMatchPatch {
         length++;
       }
     }
+  }
+
+  /**
+   * Hack to allow unit tests to call private method.  Do not use.
+   */
+  int test_diff_commonOverlap(String text1, String text2) {
+    return _diff_commonOverlap(text1, text2);
   }
 
   /**
@@ -643,6 +681,13 @@ class DiffMatchPatch {
     } else {
       return [hm[2], hm[3], hm[0], hm[1], hm[4]];
     }
+  }
+
+  /**
+   * Hack to allow unit tests to call private method.  Do not use.
+   */
+  List<String> test_diff_halfMatch(String text1, String text2) {
+    return _diff_halfMatch(text1, text2);
   }
 
   /**
@@ -699,7 +744,7 @@ class DiffMatchPatch {
     // Stack of indices where equalities are found.
     final equalities = <int>[];
     // Always equal to diffs[equalities.last()].text
-    String lastequality = null;
+    String lastEquality = null;
     int pointer = 0; // Index of current position.
     // Number of characters that changed prior to the equality.
     int length_insertions1 = 0;
@@ -715,7 +760,7 @@ class DiffMatchPatch {
         length_deletions1 = length_deletions2;
         length_insertions2 = 0;
         length_deletions2 = 0;
-        lastequality = diffs[pointer].text;
+        lastEquality = diffs[pointer].text;
       } else {
         // An insertion or deletion.
         if (diffs[pointer].operation == Operation.insert) {
@@ -725,14 +770,14 @@ class DiffMatchPatch {
         }
         // Eliminate an equality that is smaller or equal to the edits on both
         // sides of it.
-        if (lastequality != null &&
-            (lastequality.length <=
+        if (lastEquality != null &&
+            (lastEquality.length <=
                 max(length_insertions1, length_deletions1)) &&
-            (lastequality.length <=
+            (lastEquality.length <=
                 max(length_insertions2, length_deletions2))) {
           // Duplicate record.
           diffs.insert(
-              equalities.last, new Diff(Operation.delete, lastequality));
+              equalities.last, new Diff(Operation.delete, lastEquality));
           // Change second copy to insert.
           diffs[equalities.last + 1].operation = Operation.insert;
           // Throw away the equality we just deleted.
@@ -746,7 +791,7 @@ class DiffMatchPatch {
           length_deletions1 = 0;
           length_insertions2 = 0;
           length_deletions2 = 0;
-          lastequality = null;
+          lastEquality = null;
           changes = true;
         }
       }
@@ -927,6 +972,13 @@ class DiffMatchPatch {
     }
   }
 
+  /**
+   * Hack to allow unit tests to call private method.  Do not use.
+   */
+  void test_diff_cleanupSemanticLossless(List<Diff> diffs) {
+    _diff_cleanupSemanticLossless(diffs);
+  }
+
   // Define some regex patterns for matching boundaries.
   RegExp nonAlphaNumericRegex_ = new RegExp(r'[^a-zA-Z0-9]');
   RegExp whitespaceRegex_ = new RegExp(r'\s');
@@ -943,7 +995,7 @@ class DiffMatchPatch {
     // Stack of indices where equalities are found.
     final equalities = <int>[];
     // Always equal to diffs[equalities.last()].text
-    String lastequality = null;
+    String lastEquality = null;
     int pointer = 0; // Index of current position.
     // Is there an insertion operation before the last equality.
     bool pre_ins = false;
@@ -962,11 +1014,11 @@ class DiffMatchPatch {
           equalities.add(pointer);
           pre_ins = post_ins;
           pre_del = post_del;
-          lastequality = diffs[pointer].text;
+          lastEquality = diffs[pointer].text;
         } else {
           // Not a candidate, and can never become one.
           equalities.clear();
-          lastequality = null;
+          lastEquality = null;
         }
         post_ins = post_del = false;
       } else {
@@ -984,9 +1036,9 @@ class DiffMatchPatch {
          * <ins>A</del>X<ins>C</ins><del>D</del>
          * <ins>A</ins><del>B</del>X<del>C</del>
          */
-        if (lastequality != null &&
+        if (lastEquality != null &&
             ((pre_ins && pre_del && post_ins && post_del) ||
-                ((lastequality.length < Diff_EditCost / 2) &&
+                ((lastEquality.length < Diff_EditCost / 2) &&
                     ((pre_ins ? 1 : 0) +
                             (pre_del ? 1 : 0) +
                             (post_ins ? 1 : 0) +
@@ -994,11 +1046,11 @@ class DiffMatchPatch {
                         3))) {
           // Duplicate record.
           diffs.insert(
-              equalities.last, new Diff(Operation.delete, lastequality));
+              equalities.last, new Diff(Operation.delete, lastEquality));
           // Change second copy to insert.
           diffs[equalities.last + 1].operation = Operation.insert;
           equalities.removeLast(); // Throw away the equality we just deleted.
-          lastequality = null;
+          lastEquality = null;
           if (pre_ins && pre_del) {
             // No changes made which could affect previous entry, keep going.
             post_ins = post_del = true;
@@ -1084,27 +1136,17 @@ class DiffMatchPatch {
               }
             }
             // Delete the offending records and add the merged ones.
-            if (count_delete == 0) {
-              diffs.removeRange(pointer - count_insert, pointer);
-              diffs.insert(pointer - count_insert,
-                  new Diff(Operation.insert, text_insert));
-            } else if (count_insert == 0) {
-              diffs.removeRange(pointer - count_delete, pointer);
-              diffs.insert(pointer - count_delete,
-                  new Diff(Operation.delete, text_delete));
-            } else {
-              diffs.replaceRange(
-                  pointer - count_delete - count_insert, pointer, [
-                new Diff(Operation.delete, text_delete),
-                new Diff(Operation.insert, text_insert)
-              ]);
+            pointer -= count_delete + count_insert;
+            diffs.removeRange(pointer, pointer + count_delete + count_insert);
+            if (!text_delete.isEmpty) {
+              diffs.insert(pointer, new Diff(Operation.delete, text_delete));
+              pointer++;
             }
-            pointer = pointer -
-                count_delete -
-                count_insert +
-                (count_delete == 0 ? 0 : 1) +
-                (count_insert == 0 ? 0 : 1) +
-                1;
+            if (!text_insert.isEmpty) {
+              diffs.insert(pointer, new Diff(Operation.insert, text_insert));
+              pointer++;
+            }
+            pointer++;
           } else if (pointer != 0 &&
               diffs[pointer - 1].operation == Operation.equal) {
             // Merge this equality with the previous one.
@@ -1359,7 +1401,7 @@ class DiffMatchPatch {
           param = param.replaceAll('+', '%2B');
           try {
             param = Uri.decodeFull(param);
-          } on ArgumentError catch (e) {
+          } on ArgumentError {
             // Malformed URI sequence.
             throw new ArgumentError('Illegal escape in diff_fromDelta: $param');
           }
@@ -1371,7 +1413,7 @@ class DiffMatchPatch {
           int n;
           try {
             n = int.parse(param);
-          } on FormatException catch (e) {
+          } on FormatException {
             throw new ArgumentError('Invalid number in diff_fromDelta: $param');
           }
           if (n < 0) {
@@ -1381,7 +1423,7 @@ class DiffMatchPatch {
           String text;
           try {
             text = text1.substring(pointer, pointer += n);
-          } on RangeError catch (e) {
+          } on RangeError {
             throw new ArgumentError('Delta length ($pointer)'
                 ' larger than source text length (${text1.length}).');
           }
@@ -1446,9 +1488,9 @@ class DiffMatchPatch {
    * Returns the best match index or -1.
    */
   int _match_bitap(String text, String pattern, int loc) {
-    Expect.isTrue(Match_MaxBits == 0 || pattern.length <= Match_MaxBits,
-        'Pattern too long for this application.');
-
+    if (Match_MaxBits != 0 && pattern.length > Match_MaxBits) {
+      throw new Exception('Pattern too long for this application.');
+    }
     // Initialise the alphabet.
     Map<String, int> s = _match_alphabet(pattern);
 
@@ -1541,6 +1583,13 @@ class DiffMatchPatch {
   }
 
   /**
+   * Hack to allow unit tests to call private method.  Do not use.
+   */
+  int test_match_bitap(String text, String pattern, int loc) {
+    return _match_bitap(text, pattern, loc);
+  }
+
+  /**
    * Compute and return the score for a match with e errors and x location.
    * [e] is the number of errors in match.
    * [x] is the location of match.
@@ -1572,6 +1621,13 @@ class DiffMatchPatch {
       s[pattern[i]] = s[pattern[i]] | (1 << (pattern.length - i - 1));
     }
     return s;
+  }
+
+  /**
+   * Hack to allow unit tests to call private method.  Do not use.
+   */
+  Map<String, int> test_match_alphabet(String pattern) {
+    return _match_alphabet(pattern);
   }
 
   //  PATCH FUNCTIONS
@@ -1618,6 +1674,13 @@ class DiffMatchPatch {
     // Extend the lengths.
     patch.length1 += prefix.length + suffix.length;
     patch.length2 += prefix.length + suffix.length;
+  }
+
+  /**
+   * Hack to allow unit tests to call private method.  Do not use.
+   */
+  void test_patch_addContext(Patch patch, String text) {
+    _patch_addContext(patch, text);
   }
 
   /**
@@ -1715,7 +1778,7 @@ class DiffMatchPatch {
               patches.add(patch);
               patch = new Patch();
               // Unlike Unidiff, our patch lists have a rolling context.
-              // http://code.google.com/p/google-diff-match-patch/wiki/Unidiff
+              // https://github.com/google/diff-match-patch/wiki/Unidiff
               // Update prepatch text & pos to reflect the application of the
               // just completed patch.
               prepatch_text = postpatch_text;
@@ -1967,7 +2030,7 @@ class DiffMatchPatch {
         }
         while (!bigpatch.diffs.isEmpty &&
             patch.length1 < patch_size - Patch_Margin) {
-          int diff_type = bigpatch.diffs[0].operation;
+          Operation diff_type = bigpatch.diffs[0].operation;
           String diff_text = bigpatch.diffs[0].text;
           if (diff_type == Operation.insert) {
             // Insertions are harmless.
@@ -2100,7 +2163,7 @@ class DiffMatchPatch {
           String line;
           try {
             line = Uri.decodeFull(text[textPointer].substring(1));
-          } on ArgumentError catch (e) {
+          } on ArgumentError {
             // Malformed URI sequence.
             throw new ArgumentError('Illegal escape in patch_fromText: $line');
           }

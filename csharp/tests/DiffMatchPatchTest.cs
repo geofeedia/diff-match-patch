@@ -124,10 +124,10 @@ public class diff_match_patchTest : diff_match_patch {
     tmpVector.Clear();
     StringBuilder lineList = new StringBuilder();
     StringBuilder charList = new StringBuilder();
-    for (int x = 1; x < n + 1; x++) {
-      tmpVector.Add(x + "\n");
-      lineList.Append(x + "\n");
-      charList.Append(Convert.ToChar(x));
+    for (int i = 1; i < n + 1; i++) {
+      tmpVector.Add(i + "\n");
+      lineList.Append(i + "\n");
+      charList.Append(Convert.ToChar(i));
     }
     assertEquals("Test initialization fail #1.", n, tmpVector.Count);
     string lines = lineList.ToString();
@@ -164,10 +164,10 @@ public class diff_match_patchTest : diff_match_patch {
     tmpVector.Clear();
     StringBuilder lineList = new StringBuilder();
     StringBuilder charList = new StringBuilder();
-    for (int x = 1; x < n + 1; x++) {
-      tmpVector.Add(x + "\n");
-      lineList.Append(x + "\n");
-      charList.Append(Convert.ToChar (x));
+    for (int i = 1; i < n + 1; i++) {
+      tmpVector.Add(i + "\n");
+      lineList.Append(i + "\n");
+      charList.Append(Convert.ToChar (i));
     }
     assertEquals("Test initialization fail #3.", n, tmpVector.Count);
     string lines = lineList.ToString();
@@ -178,6 +178,17 @@ public class diff_match_patchTest : diff_match_patch {
     this.diff_charsToLines(diffs, tmpVector);
     assertEquals("diff_charsToLines: More than 256.", new List<Diff>
         {new Diff(Operation.DELETE, lines)}, diffs);
+
+    // More than 65536 to verify any 16-bit limitation.
+    lineList = new StringBuilder();
+    for (int i = 0; i < 66000; i++) {
+      lineList.Append(i + "\n");
+    }
+    chars = lineList.ToString();
+    Object[] result = this.diff_linesToChars(chars, "");
+    diffs = new List<Diff> {new Diff(Operation.INSERT, (string)result[0])};
+    this.diff_charsToLines(diffs, (List<string>)result[2]);
+    assertEquals("diff_charsToLines: More than 65536.", chars, diffs[0].text);
   }
 
   public void diff_cleanupMergeTest() {
@@ -229,6 +240,14 @@ public class diff_match_patchTest : diff_match_patch {
     diffs = new List<Diff> {new Diff(Operation.EQUAL, "x"), new Diff(Operation.DELETE, "ca"), new Diff(Operation.EQUAL, "c"), new Diff(Operation.DELETE, "b"), new Diff(Operation.EQUAL, "a")};
     this.diff_cleanupMerge(diffs);
     assertEquals("diff_cleanupMerge: Slide edit right recursive.", new List<Diff> {new Diff(Operation.EQUAL, "xca"), new Diff(Operation.DELETE, "cba")}, diffs);
+
+    diffs = new List<Diff> {new Diff(Operation.DELETE, "b"), new Diff(Operation.INSERT, "ab"), new Diff(Operation.EQUAL, "c")};
+    this.diff_cleanupMerge(diffs);
+    assertEquals("diff_cleanupMerge: Empty merge.", new List<Diff> {new Diff(Operation.INSERT, "a"), new Diff(Operation.EQUAL, "bc")}, diffs);
+
+    diffs = new List<Diff> {new Diff(Operation.EQUAL, ""), new Diff(Operation.INSERT, "a"), new Diff(Operation.EQUAL, "b")};
+    this.diff_cleanupMerge(diffs);
+    assertEquals("diff_cleanupMerge: Empty equality.", new List<Diff> {new Diff(Operation.INSERT, "a"), new Diff(Operation.EQUAL, "b")}, diffs);
   }
 
   public void diff_cleanupSemanticLosslessTest() {
@@ -592,6 +611,18 @@ public class diff_match_patchTest : diff_match_patch {
 
     // Convert delta string into a diff.
     assertEquals("diff_fromDelta: Unchanged characters.", diffs, this.diff_fromDelta("", delta));
+
+    // 160 kb string.
+    string a = "abcdefghij";
+    for (int i = 0; i < 14; i++) {
+      a += a;
+    }
+    diffs = new List<Diff> {new Diff(Operation.INSERT, a)};
+    delta = this.diff_toDelta(diffs);
+    assertEquals("diff_toDelta: 160kb string.", "+" + a, delta);
+
+    // Convert delta string into a diff.
+    assertEquals("diff_fromDelta: 160kb string.", diffs, this.diff_fromDelta("", delta));
   }
 
   public void diff_xIndexTest() {
@@ -692,9 +723,9 @@ public class diff_match_patchTest : diff_match_patch {
     string a = "`Twas brillig, and the slithy toves\nDid gyre and gimble in the wabe:\nAll mimsy were the borogoves,\nAnd the mome raths outgrabe.\n";
     string b = "I am the very model of a modern major general,\nI've information vegetable, animal, and mineral,\nI know the kings of England, and I quote the fights historical,\nFrom Marathon to Waterloo, in order categorical.\n";
     // Increase the text lengths by 1024 times to ensure a timeout.
-    for (int x = 0; x < 10; x++) {
-      a = a + a;
-      b = b + b;
+    for (int i = 0; i < 10; i++) {
+      a += a;
+      b += b;
     }
     DateTime startTime = DateTime.Now;
     this.diff_main(a, b);

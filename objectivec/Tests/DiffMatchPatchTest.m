@@ -172,11 +172,11 @@
   NSMutableString *lines = [NSMutableString string];
   NSMutableString *chars = [NSMutableString string];
   NSString *currentLine;
-  for (unichar x = 1; x < n + 1; x++) {
-    currentLine = [NSString stringWithFormat:@"%d\n", (int)x];
+  for (unichar i = 1; i < n + 1; i++) {
+    currentLine = [NSString stringWithFormat:@"%d\n", (int)i];
     [tmpVector addObject:currentLine];
     [lines appendString:currentLine];
-    [chars appendString:[NSString stringWithFormat:@"%C", x]];
+    [chars appendString:[NSString stringWithFormat:@"%C", i]];
   }
   XCTAssertEqual((NSUInteger)n, tmpVector.count, @"More than 256 #1.");
   XCTAssertEqual((NSUInteger)n, chars.length, @"More than 256 #2.");
@@ -212,11 +212,11 @@
   NSMutableString *lines = [NSMutableString string];
   NSMutableString *chars = [NSMutableString string];
   NSString *currentLine;
-  for (unichar x = 1; x < n + 1; x++) {
-    currentLine = [NSString stringWithFormat:@"%d\n", (int)x];
+  for (unichar i = 1; i < n + 1; i++) {
+    currentLine = [NSString stringWithFormat:@"%d\n", (int)i];
     [tmpVector addObject:currentLine];
     [lines appendString:currentLine];
-    [chars appendString:[NSString stringWithFormat:@"%C", x]];
+    [chars appendString:[NSString stringWithFormat:@"%C", i]];
   }
   XCTAssertEqual((NSUInteger)n, tmpVector.count, @"More than 256 #1.");
   XCTAssertEqual((NSUInteger)n, chars.length, @"More than 256 #2.");
@@ -224,6 +224,19 @@
   diffs = [NSArray arrayWithObject:[Diff diffWithOperation:DIFF_DELETE andText:chars]];
   [dmp diff_chars:diffs toLines:tmpVector];
   XCTAssertEqualObjects([NSArray arrayWithObject:[Diff diffWithOperation:DIFF_DELETE andText:lines]], diffs, @"More than 256 #3.");
+
+  // More than 65536 to verify any 16-bit limitation.
+  lines = [NSMutableString string];
+  for (int i = 1; i < 66000; i++) {
+    currentLine = [NSString stringWithFormat:@"%d\n", i];
+    [lines appendString:currentLine];
+  }
+  NSArray *result;
+  result = [dmp diff_linesToCharsForFirstString:lines andSecondString:@""];
+  diffs = [NSArray arrayWithObject:[Diff diffWithOperation:DIFF_INSERT andText:result[0]]];
+  [dmp diff_chars:diffs toLines:result[2]];
+  Diff *myDiff = diffs.firstObject;
+  XCTAssertEqualObjects(lines, myDiff.text, @"More than 65536.");
 
   [dmp release];
 }
@@ -303,6 +316,18 @@
   [dmp diff_cleanupMerge:diffs];
   expectedResult = [NSMutableArray arrayWithObjects:[Diff diffWithOperation:DIFF_EQUAL andText:@"xca"], [Diff diffWithOperation:DIFF_DELETE andText:@"cba"], nil];
   XCTAssertEqualObjects(expectedResult, diffs, @"Slide edit right recursive.");
+
+  // Empty merge.
+  diffs = [NSMutableArray arrayWithObjects:[Diff diffWithOperation:DIFF_DELETE andText:@"b"], [Diff diffWithOperation:DIFF_INSERT andText:@"ab"], [Diff diffWithOperation:DIFF_EQUAL andText:@"c"], nil];
+  [dmp diff_cleanupMerge:diffs];
+  expectedResult = [NSMutableArray arrayWithObjects:[Diff diffWithOperation:DIFF_INSERT andText:@"a"], [Diff diffWithOperation:DIFF_EQUAL andText:@"bc"], nil];
+  XCTAssertEqualObjects(expectedResult, diffs, @"Empty merge.");
+
+  // Empty equality.
+  diffs = [NSMutableArray arrayWithObjects:[Diff diffWithOperation:DIFF_EQUAL andText:@""], [Diff diffWithOperation:DIFF_INSERT andText:@"a"], [Diff diffWithOperation:DIFF_EQUAL andText:@"b"], nil];
+  [dmp diff_cleanupMerge:diffs];
+  expectedResult = [NSMutableArray arrayWithObjects:[Diff diffWithOperation:DIFF_INSERT andText:@"a"], [Diff diffWithOperation:DIFF_EQUAL andText:@"b"], nil];
+  XCTAssertEqualObjects(expectedResult, diffs, @"Empty equality.");
 
   [dmp release];
 }
@@ -740,6 +765,22 @@
   expectedResult = [dmp diff_fromDeltaWithText:@"" andDelta:delta error:NULL];
   XCTAssertEqualObjects(diffs, expectedResult, @"diff_fromDelta: Unchanged characters. Convert delta string into a diff.");
 
+  // 160 kb string.
+  NSString *a = @"abcdefghij";
+  NSMutableString *aMutable = [NSMutableString stringWithString:a];
+  for (int i = 0; i < 14; i++) {
+    [aMutable appendString:aMutable];
+  }
+  a = aMutable;
+  diffs = [NSMutableArray arrayWithObject:
+           [Diff diffWithOperation:DIFF_INSERT andText:a]];
+  delta = [dmp diff_toDelta:diffs];
+  XCTAssertEqualObjects([@"+" stringByAppendingString:a], delta, @"diff_toDelta: 160kb string.");
+  
+  // Convert delta string into a diff.
+  expectedResult = [dmp diff_fromDeltaWithText:@"" andDelta:delta error:NULL];
+  XCTAssertEqualObjects(diffs, expectedResult, @"diff_fromDelta: 160kb string. Convert delta string into a diff.");
+
   [dmp release];
 }
 
@@ -859,7 +900,7 @@
   NSMutableString *aMutable = [NSMutableString stringWithString:a];
   NSMutableString *bMutable = [NSMutableString stringWithString:b];
   // Increase the text lengths by 1024 times to ensure a timeout.
-  for (int x = 0; x < 10; x++) {
+  for (int i = 0; i < 10; i++) {
     [aMutable appendString:aMutable];
     [bMutable appendString:bMutable];
   }

@@ -269,6 +269,14 @@ function testDiffCleanupMerge()
       {DIFF_DELETE, 'b'}, {DIFF_EQUAL, 'a'}}
   dmp.diff_cleanupMerge(diffs)
   assertEquivalent({{DIFF_EQUAL, 'xca'}, {DIFF_DELETE, 'cba'}}, diffs)
+  -- Empty merge.
+  diffs = {{DIFF_DELETE, 'b'}, {DIFF_INSERT, 'ab'}, {DIFF_EQUAL, 'c'}}
+  dmp.diff_cleanupMerge(diffs)
+  assertEquivalent({{DIFF_INSERT, 'a'}, {DIFF_EQUAL, 'bc'}}, diffs)
+  -- Empty equality.
+  diffs = {{DIFF_EQUAL, ''}, {DIFF_INSERT, 'a'}, {DIFF_EQUAL, 'b'}}
+  dmp.diff_cleanupMerge(diffs)
+  assertEquivalent({{DIFF_INSERT, 'a'}, {DIFF_EQUAL, 'b'}}, diffs)
 end
 
 function testDiffCleanupSemanticLossless()
@@ -542,6 +550,15 @@ function testDiffDelta()
 
   -- Convert delta string into a diff.
   assertEquivalent(diffs, dmp.diff_fromDelta('', delta))
+
+  -- 160 kb string.
+  local a = string.rep('abcdefghij', 16384)
+  diffs = {{DIFF_INSERT, a}};
+  delta = dmp.diff_toDelta(diffs);
+  assertEquals('+' .. a, delta);
+
+  -- Convert delta string into a diff.
+  assertEquivalent(diffs, dmp.diff_fromDelta('', delta));
 end
 
 function testDiffXIndex()
